@@ -1,0 +1,30 @@
+# Dependencies & build outputs
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+
+# Secrets, environment files & OAuth tokens
+.env
+**/.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Runtime state, logs, screenshots & generated media
+**/data/
+**/screenshots/
+**/logs/
+generated-media/
+*.log
+
+# Local test outputs
+/flappy-bird.html
+/flappy-birb-webapp.html
+/neon-snake.html
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

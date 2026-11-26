@@ -1,0 +1,23 @@
+services:
+  gemini-browser-mcp:
+    build: .
+    container_name: gemini-browser-mcp
+    ports:
+      - "${PORT:-3000}:3000"
+    env_file:
+      - .env
+    environment:
+      - HEADLESS=true
+    init: true
+    shm_size: "1gb"
+    restart: unless-stopped
+
+  # Optional: start with `docker compose --profile tunnel up --build`
+  # to automatically expose https://*.trycloudflare.com/mcp for Gemini Web App
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    profiles: ["tunnel"]
+    command: tunnel --no-autoupdate --url http://gemini-browser-mcp:3000
+    depends_on:
+      - gemini-browser-mcp
+    restart: unless-stopped

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Gemini Agent Relay Bridge</title>
+    <style>
+      body {
+        width: 280px;
+        margin: 0;
+        padding: 14px;
+        font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+        background: #0f172a;
+        color: #f8fafc;
+      }
+      h1 {
+        font-size: 14px;
+        margin: 0 0 10px 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .pill {
+        font-size: 11px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-weight: 600;
+      }
+      .ok { background: #166534; color: #dcfce7; }
+      .err { background: #991b1b; color: #fee2e2; }
+      .row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 8px 0;
+        border-top: 1px solid #1e293b;
+        font-size: 12px;
+      }
+      button {
+        width: 100%;
+        margin-top: 8px;
+        padding: 8px 10px;
+        border-radius: 6px;
+        border: none;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 12px;
+      }
+      #toggleBtn { background: #2563eb; color: #fff; }
+      #openBtn { background: #1e293b; color: #e2e8f0; }
+      .meta {
+        font-size: 11px;
+        color: #94a3b8;
+        margin-top: 8px;
+        word-break: break-all;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>
+      <span>Gemini Relay <small id="verLabel" style="opacity:0.65;font-weight:500;">v1.2.0</small></span>
+      <span id="statusPill" class="pill err">Checking...</span>
+    </h1>
+    <div class="row">
+      <span>Auto-Trigger</span>
+      <strong id="enabledLabel">...</strong>
+    </div>
+    <div class="row">
+      <span>Pending Tasks</span>
+      <strong id="pendingLabel">-</strong>
+    </div>
+    <button id="toggleBtn">Toggle Auto-Trigger</button>
+    <button id="openBtn">Open Gemini DevMode</button>
+    <div id="meta" class="meta"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>
