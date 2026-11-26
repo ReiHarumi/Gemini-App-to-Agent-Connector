@@ -309,7 +309,8 @@ export function createRelayMcpServer(publicBaseUrl?: string): McpServer {
     "relay_request_local_files",
     {
       title: "Access Local Computer Files (Read-Only Auto-Responder via AGY)",
-      description: `Automatically answers read-only file requests inside "${getAllowedRoot()}". Fast actions (list, read, search) respond instantly (<100ms); complex actions (summarize, custom) auto-run through Antigravity (AGY). Writes are disabled by read-only policy.`,
+      description:
+        "Automatically answers read-only file requests inside LOCAL_FILES_ROOT (configured in .env). Fast actions (list, read, search) respond instantly (<100ms); complex actions (summarize, custom) auto-run through Antigravity (AGY). Secret files (.env, tokens, keys) and symlinks escaping LOCAL_FILES_ROOT are strictly blocked.",
       inputSchema: {
         action: z
           .enum(["list", "read", "search", "summarize", "custom"])

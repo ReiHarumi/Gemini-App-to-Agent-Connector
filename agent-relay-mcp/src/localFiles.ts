@@ -1,10 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
 
-const DEFAULT_READ_ROOT =
-  process.env.LOCAL_FILES_ROOT?.trim() ||
-  path.resolve(process.cwd(), "..");
-
 const MAX_READ_BYTES = 100 * 1024; // 100 KB cap per file read
 const MAX_LIST_ENTRIES = 200;
 const MAX_SEARCH_MATCHES = 50;
@@ -15,15 +11,43 @@ const IGNORED_DIRS = new Set([
   ".next",
   "__pycache__",
   "screenshots",
+  ".obsidian",
 ]);
 
+const DENIED_FILENAMES = new Set([
+  ".env",
+  "oauth-tokens.json",
+  "relay-store.json",
+  "credentials.json",
+  "id_rsa",
+  "id_ed25519",
+  ".npmrc",
+  ".netrc",
+]);
+
+function isSensitivePath(targetPath: string): boolean {
+  const base = path.basename(targetPath).toLowerCase();
+  if (DENIED_FILENAMES.has(base)) return true;
+  if (base.startsWith(".env.") && base !== ".env.example") return true;
+  if (base.endsWith(".pem") || base.endsWith(".key") || base.endsWith(".p12")) return true;
+  const segments = targetPath.split(path.sep).map((s) => s.toLowerCase());
+  if (segments.includes(".git") || segments.includes(".ssh")) return true;
+  return false;
+}
+
 export function getAllowedRoot(): string {
-  return path.resolve(DEFAULT_READ_ROOT);
+  const configured = process.env.LOCAL_FILES_ROOT?.trim();
+  if (!configured) {
+    throw new Error(
+      "LOCAL_FILES_ROOT is not configured. Set LOCAL_FILES_ROOT in agent-relay-mcp/.env to a dedicated read-only folder before using local file tools."
+    );
+  }
+  return fs.realpathSync(path.resolve(configured));
 }
 
 /**
- * Resolves a requested path strictly inside the allowed read-only root.
- * Throws if the path attempts to escape the allowed root.
+ * Resolves a requested path strictly inside the allowed read-only root,
+ * resolving symlinks via realpathSync and blocking secret/credential files.
  */
 export function resolveAllowedPath(pathHint?: string): string {
   const root = getAllowedRoot();
@@ -36,19 +60,30 @@ export function resolveAllowedPath(pathHint?: string): string {
     ? path.resolve(trimmed)
     : path.resolve(root, trimmed);
 
+  if (!fs.existsSync(candidate)) {
+    throw new Error(`Path does not exist: "${pathHint}"`);
+  }
+
+  const realCandidate = fs.realpathSync(candidate);
   const normRoot = root.toLowerCase();
-  const normCandidate = candidate.toLowerCase();
+  const normCandidate = realCandidate.toLowerCase();
 
   if (
     normCandidate !== normRoot &&
     !normCandidate.startsWith(normRoot + path.sep.toLowerCase())
   ) {
     throw new Error(
-      `Access denied: "${pathHint}" is outside the allowed read-only root "${root}".`
+      `Access denied: "${pathHint}" resolves outside the allowed read-only root.`
     );
   }
 
-  return candidate;
+  if (isSensitivePath(realCandidate)) {
+    throw new Error(
+      `Access denied: "${path.basename(realCandidate)}" is blocked by the secret-file deny list.`
+    );
+  }
+
+  return realCandidate;
 }
 
 export function listLocalFiles(pathHint?: string, recursive = false): {
@@ -102,6 +137,7 @@ export function listLocalFiles(pathHint?: string, recursive = false): {
       }
       if (item.isDirectory() && IGNORED_DIRS.has(item.name)) continue;
       const full = path.join(dir, item.name);
+      if (isSensitivePath(full)) continue;
       const rel = path.relative(root, full);
       if (item.isDirectory()) {
         entries.push({ name: item.name, relativePath: rel, type: "dir" });
@@ -267,6 +303,7 @@ export function searchLocalFiles(
         walk(full, depth + 1);
       } else {
         const full = path.join(dir, item.name);
+        if (isSensitivePath(full)) continue;
         const rel = path.relative(root, full);
         if (item.name.toLowerCase().includes(needle)) {
           filenameMatches.push({ relativePath: rel, matchType: "filename" });

@@ -1,6 +1,6 @@
 {
   "name": "agent-relay-mcp",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Two-way multi-agent MCP relay connecting Gemini Web App (including Google Photos), Antigravity (local computer files), and any other MCP-capable agent.",
   "type": "module",
   "main": "dist/index.js",

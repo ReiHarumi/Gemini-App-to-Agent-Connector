@@ -11,23 +11,23 @@ A self-hosted, OAuth 2.0-secured two-way MCP bridge connecting **Google Gemini W
 | `gemini-relay-extension/` | Chrome MV3 | Manifest V3 extension that connects to `127.0.0.1:3001/bridge/stream`, auto-dismisses DevMode's app modal, switches `Task` / `Chat` mode & models, runs up to **5 parallel Gemini tabs**, auto-captures generated media, and auto-reloads on updates. |
 | `mcp-tray-launcher/` | Windows | Silent Windows Hidden Icons tray launcher (`mcp-tray.ps1` + `start-hidden.vbs`) with 10s watchdog auto-restart and **Hide/Show Chrome to Tray** controls. |
 
-## Quick Start
+## Quick Start (1-Command Cross-Platform Setup)
 
-### 1. Install & Build Both MCP Servers
-```powershell
-cd gemini-browser-mcp
-copy .env.example .env
-npm install
-npx playwright install chromium
-npm run build
+Works on **Windows, macOS, and Linux** — or hand this repo URL to your AI coding agent (Claude, Antigravity, Cursor), which will follow [AGENTS.md](./AGENTS.md) and [llms.txt](./llms.txt) automatically:
 
-cd ..\agent-relay-mcp
-copy .env.example .env
-npm install
-npm run build
+```bash
+git clone https://github.com/ReiHarumi/Gemini-App-to-Agent-Connector.git
+cd Gemini-App-to-Agent-Connector
+node setup.mjs --local-files-root "/path/to/dedicated-safe-folder" --public-host "https://<your-machine>.<your-tailnet>.ts.net"
 ```
 
-Fill in `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET`, `LOCAL_FILES_ROOT`, and `PUBLIC_BASE_URL` in each `.env`.
+`setup.mjs` generates strong random OAuth 2.0 credentials for both servers, writes both `.env` files, installs dependencies, builds both MCPs, and prints your exact copy-paste Gemini DevMode setup block.
+
+> **Important:** Both MCP servers **fail closed** (`503`) on external traffic until OAuth credentials are set in `.env`. Always point `LOCAL_FILES_ROOT` at a dedicated non-sensitive folder (secret files like `.env`, `oauth-tokens.json`, `*.key`, and escaping symlinks are also hard-blocked). See [SECURITY.md](./SECURITY.md).
+
+### 1. Start Both Servers
+- **macOS / Linux / Windows:** Run `npm start` inside `gemini-browser-mcp/` and `agent-relay-mcp/` (or `docker compose up` for Browser MCP).
+- **Windows (optional silent tray):** Double-click `mcp-tray-launcher/start-hidden.vbs` to run both servers invisibly in Hidden Icons with **Hide/Show Chrome to Tray**.
 
 ### 2. Expose Permanently Over HTTPS (Tailscale Funnel)
 ```powershell

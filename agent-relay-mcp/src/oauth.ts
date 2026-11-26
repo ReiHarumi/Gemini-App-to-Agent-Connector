@@ -21,12 +21,46 @@ interface TokenRecord {
 
 export interface OAuthConfig {
   serverName: string;
-  mountPrefix: string; // "" for browser-mcp, "/relay" for agent-relay-mcp
+  mountPrefix: string;
   storeFile: string;
 }
 
+function safeEqual(a: string, b: string): boolean {
+  const bufA = Buffer.from(a, "utf8");
+  const bufB = Buffer.from(b, "utf8");
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+function isAllowedRedirectUri(rawUri: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUri);
+  } catch {
+    return false;
+  }
+
+  // Allow explicit custom origins via env var (comma-separated)
+  const customOrigins = (process.env.OAUTH_ALLOWED_REDIRECT_ORIGINS || "")
+    .split(",")
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+
+  const origin = parsed.origin.toLowerCase();
+  if (customOrigins.includes(origin)) return true;
+
+  // Default allowlist: official Google OAuth redirect origins over HTTPS
+  if (parsed.protocol !== "https:") return false;
+  const host = parsed.hostname.toLowerCase();
+  return (
+    host === "google.com" ||
+    host.endsWith(".google.com") ||
+    host === "googleusercontent.com" ||
+    host.endsWith(".googleusercontent.com")
+  );
+}
+
 function isLocalDirectRequest(req: Request): boolean {
-  // Tailscale Funnel always sets X-Forwarded-For / X-Forwarded-Host
   if (req.headers["x-forwarded-for"] || req.headers["x-forwarded-host"]) {
     return false;
   }
@@ -103,14 +137,23 @@ export function createOAuthModule(config: OAuthConfig) {
   }
 
   function authMiddleware(req: Request, res: Response, next: NextFunction): void {
-    // Always allow direct localhost (Antigravity & local agents on this PC)
+    // Allow direct localhost (local AI agents on this machine)
     if (isLocalDirectRequest(req)) {
       next();
       return;
     }
 
+    // FAIL-CLOSED: Refuse external traffic if no auth credentials are configured
     if (!enabled && !staticToken) {
-      next();
+      res.status(503).json({
+        jsonrpc: "2.0",
+        error: {
+          code: -32302,
+          message:
+            "Server auth not configured. Set OAUTH_CLIENT_ID & OAUTH_CLIENT_SECRET (or MCP_AUTH_TOKEN) in .env before exposing publicly.",
+        },
+        id: null,
+      });
       return;
     }
 
@@ -118,7 +161,7 @@ export function createOAuthModule(config: OAuthConfig) {
     const bearerMatch = authHeader.match(/^bearer\s+(.+)$/i);
     if (bearerMatch) {
       const token = bearerMatch[1].trim();
-      if (staticToken && token === staticToken) {
+      if (staticToken && safeEqual(token, staticToken)) {
         next();
         return;
       }
@@ -127,7 +170,9 @@ export function createOAuthModule(config: OAuthConfig) {
         next();
         return;
       }
-      console.warn(`[OAuth 401] ${req.method} ${req.path} — unrecognized or expired Bearer token (known tokens: ${tokensByAccess.size})`);
+      console.warn(
+        `[OAuth 401] ${req.method} ${req.path} — unrecognized or expired Bearer token (known tokens: ${tokensByAccess.size})`
+      );
     } else {
       console.warn(`[OAuth 401] ${req.method} ${req.path} — missing Authorization Bearer header`);
     }
@@ -151,7 +196,6 @@ export function createOAuthModule(config: OAuthConfig) {
     const p = config.mountPrefix;
     const paths = (suffix: string) => (p ? [suffix, `${p}${suffix}`] : [suffix]);
 
-    // RFC 9728 Protected Resource Metadata
     app.get(paths("/.well-known/oauth-protected-resource"), (req: Request, res: Response) => {
       const base = getBaseUrl(req);
       res.json({
@@ -161,7 +205,6 @@ export function createOAuthModule(config: OAuthConfig) {
       });
     });
 
-    // RFC 8414 Authorization Server Metadata
     app.get(paths("/.well-known/oauth-authorization-server"), (req: Request, res: Response) => {
       const base = getBaseUrl(req);
       res.json({
@@ -171,11 +214,10 @@ export function createOAuthModule(config: OAuthConfig) {
         response_types_supported: ["code"],
         grant_types_supported: ["authorization_code", "refresh_token"],
         token_endpoint_auth_methods_supported: ["client_secret_post", "client_secret_basic"],
-        code_challenge_methods_supported: ["S256", "plain"],
+        code_challenge_methods_supported: ["S256"],
       });
     });
 
-    // Authorization Endpoint (shows clean 1-click approve button for the owner)
     app.get(paths("/oauth/authorize"), (req: Request, res: Response) => {
       const reqClientId = String(req.query.client_id || "");
       const redirectUri = String(req.query.redirect_uri || "");
@@ -183,12 +225,16 @@ export function createOAuthModule(config: OAuthConfig) {
       const codeChallenge = String(req.query.code_challenge || "");
       const codeChallengeMethod = String(req.query.code_challenge_method || "");
 
-      if (!enabled || reqClientId !== clientId) {
+      if (!enabled || !safeEqual(reqClientId, clientId)) {
         res.status(400).send("Invalid client_id");
         return;
       }
-      if (!redirectUri) {
-        res.status(400).send("Missing redirect_uri");
+      if (!redirectUri || !isAllowedRedirectUri(redirectUri)) {
+        res.status(400).send("Disallowed redirect_uri origin");
+        return;
+      }
+      if (codeChallenge && codeChallengeMethod && codeChallengeMethod !== "S256") {
+        res.status(400).send("Only PKCE S256 is supported");
         return;
       }
 
@@ -198,7 +244,7 @@ export function createOAuthModule(config: OAuthConfig) {
         clientId: reqClientId,
         redirectUri,
         codeChallenge: codeChallenge || undefined,
-        codeChallengeMethod: codeChallengeMethod || undefined,
+        codeChallengeMethod: codeChallenge ? "S256" : undefined,
         expiresAt: Date.now() + 5 * 60 * 1000,
       });
 
@@ -219,7 +265,6 @@ a.btn{display:inline-block;margin-top:16px;padding:10px 18px;background:#2563eb;
 </div></body></html>`);
     });
 
-    // Token Endpoint (supports application/x-www-form-urlencoded & JSON)
     app.post(paths("/oauth/token"), (req: Request, res: Response) => {
       if (!enabled) {
         res.status(400).json({ error: "oauth_not_configured" });
@@ -239,7 +284,7 @@ a.btn{display:inline-block;margin-top:16px;padding:10px 18px;background:#2563eb;
         }
       }
 
-      if (reqClientId !== clientId || reqClientSecret !== clientSecret) {
+      if (!safeEqual(reqClientId, clientId) || !safeEqual(reqClientSecret, clientSecret)) {
         res.status(401).json({ error: "invalid_client" });
         return;
       }
@@ -256,19 +301,16 @@ a.btn{display:inline-block;margin-top:16px;padding:10px 18px;background:#2563eb;
         }
         if (rec.codeChallenge) {
           const verifier = String(req.body?.code_verifier || "");
-          const expected =
-            rec.codeChallengeMethod === "S256"
-              ? crypto.createHash("sha256").update(verifier).digest("base64url")
-              : verifier;
-          if (expected !== rec.codeChallenge) {
-            res.status(400).json({ error: "invalid_grant", error_description: "PKCE mismatch" });
+          const expected = crypto.createHash("sha256").update(verifier).digest("base64url");
+          if (!safeEqual(expected, rec.codeChallenge)) {
+            res.status(400).json({ error: "invalid_grant", error_description: "PKCE S256 mismatch" });
             return;
           }
         }
 
         const accessToken = crypto.randomBytes(32).toString("hex");
         const refreshToken = crypto.randomBytes(32).toString("hex");
-        const expiresIn = 30 * 24 * 3600; // 30 days
+        const expiresIn = 30 * 24 * 3600;
         const tokenRec: TokenRecord = {
           accessToken,
           refreshToken,

@@ -32,7 +32,7 @@ app.use(express.urlencoded({ extended: true }));
 
 oauth.registerRoutes(app);
 
-const SERVER_VERSION = "2.2.0";
+const SERVER_VERSION = "2.3.0";
 const EXTENSION_DIR =
   process.env.EXTENSION_DIR?.trim() ||
   path.resolve(process.cwd(), "..", "gemini-relay-extension");
@@ -58,6 +58,14 @@ function getExtensionSignature(): { version: string; signature: string } {
   }
 }
 
+function safeAllowedRootLabel(): string {
+  try {
+    return getAllowedRoot();
+  } catch {
+    return "unconfigured (set LOCAL_FILES_ROOT in .env)";
+  }
+}
+
 function healthHandler(_req: Request, res: Response) {
   const extInfo = getExtensionSignature();
   res.json({
@@ -72,7 +80,7 @@ function healthHandler(_req: Request, res: Response) {
       generalGemini: relayStore.isWebAppBridgeConnected()
         ? "gemini-webapp-task-mode (live)"
         : "agy-cli (Gemini 4 Hydrogen (Medium))",
-      localFiles: `read-only (${getAllowedRoot()})`,
+      localFiles: `read-only (${safeAllowedRootLabel()})`,
       googlePhotos: relayStore.isWebAppBridgeConnected()
         ? "gemini-webapp-task-mode (live)"
         : "gemini-app + windows-notification",

@@ -1,0 +1,19 @@
+# Gemini App to Agent Connector (llms.txt)
+
+> Self-hosted, OAuth 2.0-secured two-way MCP bridge connecting Google Gemini Web App (Task & Chat modes, Deep Research, Nano Banana Image, Veo Video, Lyria Music, Google Photos) with local AI agents (Antigravity, Claude, Cursor) and Playwright/DevTools/Firecrawl browser automation.
+
+## One-Command Setup (Windows / macOS / Linux)
+```bash
+git clone https://github.com/ReiHarumi/Gemini-App-to-Agent-Connector.git
+cd Gemini-App-to-Agent-Connector
+node setup.mjs --local-files-root "/path/to/safe-folder" --public-host "https://<machine>.<tailnet>.ts.net"
+```
+
+## Key Files for LLMs
+- [AGENTS.md](./AGENTS.md): Step-by-step agent installation runbook and security invariants
+- [README.md](./README.md): Full human-readable architecture and quick start
+- [SECURITY.md](./SECURITY.md): Threat model, fail-closed OAuth 2.0, and local file sandboxing
+- [setup.mjs](./setup.mjs): Cross-platform automated secret generator and builder
+- [agent-relay-mcp/src/mcp.ts](./agent-relay-mcp/src/mcp.ts): All 16 MCP tool schemas
+- [gemini-browser-mcp/src/mcp.ts](./gemini-browser-mcp/src/mcp.ts): All 16 Browser/DevTools/Firecrawl tool schemas
+- [gemini-relay-extension/content.js](./gemini-relay-extension/content.js): Gemini Web App DOM selectors and Task/Chat controller
